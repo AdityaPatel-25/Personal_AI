@@ -55,10 +55,10 @@ async def generate_gemini_stream(message: str) -> AsyncIterator[str]:
     """Asynchronously calls Gemini's generate_content_stream and yields raw token chunks."""
     client = get_gemini_client()
     
-    # Preferred models for DSA coaching: defaults to gemini-2.5-pro with smart fallback
-    configured_model = os.getenv("GEMINI_MODEL", "gemini-2.5-pro")
+    # Preferred models for DSA coaching: defaults to gemini-3.5-flash with smart fallback
+    configured_model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
     models_to_try = [configured_model]
-    for fallback in ["gemini-2.5-pro", "gemini-3.8-flash", "gemma-4-26b-a4b-it"]:
+    for fallback in ["gemini-3.5-flash", "gemini-3.7-flash", "gemini-3.8-flash", "gemini-3.1-flash-lite"]:
         if fallback not in models_to_try:
             models_to_try.append(fallback)
 

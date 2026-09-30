@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  * {
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #0b0f17;
+    color: #e2e8f0;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  code, pre {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.4);
+}
+
+/* Blinking cursor for streaming token effect */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cursor-blink {
+  display: inline-block;
+  width: 2px;
+  height: 1.15em;
+  background-color: #818cf8;
+  vertical-align: -0.15em;
+  margin-left: 2px;
+  animation: blink 0.8s infinite;
+}
+
+/* Markdown styling inside AI messages */
+.prose-dsa {
+  color: #e2e8f0;
+  line-height: 1.65;
+  font-size: 0.95rem;
+}
+
+.prose-dsa p {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose-dsa p:first-child {
+  margin-top: 0;
+}
+
+.prose-dsa p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-dsa ul, .prose-dsa ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-left: 1.35rem;
+}
+
+.prose-dsa ul {
+  list-style-type: disc;
+}
+
+.prose-dsa ol {
+  list-style-type: decimal;
+}
+
+.prose-dsa li {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.prose-dsa strong {
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.prose-dsa code:not(pre code) {
+  background-color: rgba(30, 41, 59, 0.8);
+  color: #a5b4fc;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.375rem;
+  font-size: 0.875em;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.prose-dsa pre {
+  background-color: #0d1117;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 0.85rem 1rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+}
+
+.prose-dsa pre code {
+  color: #e2e8f0;
+  font-size: 0.85rem;
+  background: transparent;
+  padding: 0;
+  border: none;
+}
+
+.prose-dsa h1, .prose-dsa h2, .prose-dsa h3, .prose-dsa h4 {
+  color: #f1f5f9;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose-dsa h1 { font-size: 1.25rem; }
+.prose-dsa h2 { font-size: 1.15rem; }
+.prose-dsa h3 { font-size: 1.05rem; }
+
+.prose-dsa blockquote {
+  border-left: 3px solid #6366f1;
+  padding-left: 0.75rem;
+  color: #94a3b8;
+  margin: 0.5rem 0;
+  font-style: italic;
+}

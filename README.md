@@ -1,6 +1,6 @@
 # Personal AI — Competitive Programming & DSA Coach
 
-> **Day 1 Milestone:** Production-ready backend skeleton with an asynchronous streaming chat endpoint powered by Google Gemini and FastAPI.
+> **Day 2 Milestone:** Interactive, modern React + Vite frontend styled with Tailwind CSS, connected to the asynchronous streaming chat endpoint powered by Google Gemini and FastAPI.
 
 ---
 
@@ -10,14 +10,26 @@
 Personal_AI/
 ├── .env.example              # Example environment variables (API key)
 ├── README.md                 # Setup, run commands, curl testing & architecture
-└── backend/
-    ├── main.py               # FastAPI application, CORS setup & router registration
-    ├── chat.py               # Gemini streaming logic & /chat endpoint
-    ├── rag.py                # Placeholder for Day 4: RAG & Problem Knowledge Base
-    ├── db.py                 # Placeholder for Day 3: Database & Chat Sessions
-    ├── tools.py              # Placeholder for Day 5: Code Execution Sandbox & Tools
-    ├── requirements.txt      # Python dependencies
-    └── .env.example          # Backend-local env template
+├── backend/
+│   ├── main.py               # FastAPI application, CORS setup & router registration
+│   ├── chat.py               # Gemini streaming logic & /chat endpoint
+│   ├── rag.py                # Placeholder for Day 4: RAG & Problem Knowledge Base
+│   ├── db.py                 # Placeholder for Day 3: Database & Chat Sessions
+│   ├── tools.py              # Placeholder for Day 5: Code Execution Sandbox & Tools
+│   ├── requirements.txt      # Python dependencies
+│   └── .env.example          # Backend-local env template
+└── frontend/
+    ├── index.html            # Main HTML with Google Fonts (Inter, JetBrains Mono)
+    ├── package.json          # Frontend dependencies & scripts
+    ├── vite.config.js        # Vite config with Tailwind CSS plugin & port 5173
+    └── src/
+        ├── main.jsx          # React DOM entrypoint
+        ├── App.jsx           # Root application component
+        ├── index.css         # Tailwind directives, animations & custom scrollbars
+        └── components/
+            ├── ChatWindow.jsx   # Top-level state orchestration & streaming fetch logic
+            ├── MessageList.jsx  # Conversation bubbles, markdown formatting, copy code
+            └── MessageInput.jsx # Input textarea, keybindings (Enter/Shift+Enter), send/stop
 ```
 
 ---
@@ -25,10 +37,15 @@ Personal_AI/
 ## 🚀 Quickstart & Setup
 
 ### 1. Prerequisites
-- Python 3.10+ (tested on Python 3.14)
+- **Python 3.10+** (tested on Python 3.14)
+- **Node.js 18+** & **npm** (tested on Node v25 / npm 11)
 - A Google Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 
-### 2. Create and Activate Virtual Environment
+---
+
+### 2. Backend Setup
+
+#### A. Create and Activate Virtual Environment
 
 **Windows (PowerShell):**
 ```powershell
@@ -42,13 +59,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 3. Install Dependencies
+#### B. Install Python Dependencies
 ```bash
 pip install -r backend/requirements.txt
 ```
 
-### 4. Configure Environment Variables
-Copy `.env.example` to `.env` in the root directory (or in `backend/.env`):
+#### C. Configure Environment Variables
+Copy `.env.example` to `.env` in the root directory:
 
 ```bash
 cp .env.example .env
@@ -62,25 +79,51 @@ GEMINI_MODEL=gemini-2.5-pro
 
 ---
 
-## 🏃 Running the Server
+### 3. Frontend Setup
 
-Start the development server with hot-reload:
+Navigate into the `frontend/` folder and install dependencies:
 
-### From the project root:
 ```bash
+cd frontend
+npm install
+```
+
+---
+
+## 🏃 Running Backend + Frontend Together
+
+To run both services concurrently, open two terminal windows:
+
+### Terminal 1: Start Backend (FastAPI on Port 8000)
+
+**From project root:**
+```powershell
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
 uvicorn backend.main:app --reload --port 8000
 ```
 
-### Or from inside the `backend` folder:
 ```bash
-cd backend
-uvicorn main:app --reload --port 8000
+# macOS / Linux
+source .venv/bin/activate
+uvicorn backend.main:app --reload --port 8000
 ```
 
-The API will be available at:
-- **API Base:** [http://localhost:8000](http://localhost:8000)
-- **Interactive Swagger Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **ReDoc Alternative:** [http://localhost:8000/redoc](http://localhost:8000/redoc)
+*The backend will be live at [http://localhost:8000](http://localhost:8000).*
+
+---
+
+### Terminal 2: Start Frontend (Vite on Port 5173)
+
+**From project root:**
+```bash
+cd frontend
+npm run dev
+```
+
+*The frontend UI will be live at [http://localhost:5173](http://localhost:5173).*
+
+Open your browser to [http://localhost:5173](http://localhost:5173) to start practicing competitive programming with your AI coach!
 
 ---
 
@@ -121,63 +164,85 @@ curl -N -X POST http://localhost:8000/chat \
 curl.exe -N -X POST http://localhost:8000/chat -H "Content-Type: application/json" -H "Accept: text/event-stream" -d '{\"message\": \"What is the time complexity of QuickSort best vs worst case?\"}'
 ```
 
-**Example Output:**
-```text
-data: {"text": "Quick"}
-
-data: {"text": "Sort"}
-
-data: {"text": " Best: O(n log n), Worst: O(n^2)"}
-
-data: [DONE]
-```
-
 ---
 
-## 🧠 How the Streaming Response Works Under the Hood
+## 🧠 How Streaming Works: End-to-End Deep Dive
 
-Standard HTTP request-response cycles wait for the complete answer to finish computing before transmitting anything:
-
-```text
-[Client Request] ──> [Server waits 3-8s for full LLM answer] ──> [Single Huge HTTP Response]
-```
-
-Our streaming architecture streams tokens as they leave the LLM:
+### 1. The Core Problem with Standard HTTP
+In standard HTTP/REST requests, the client issues a request and waits while the server finishes generating the entire text. For an LLM answering a complex algorithmic problem, this causes a 3 to 10 second delay with an empty screen before displaying a wall of text.
 
 ```text
-[Client Request] ──> [FastAPI opens HTTP connection]
-                     ├──> Chunk 1 ("Quick")  ────────> [Client displays immediately]
-                     ├──> Chunk 2 ("Sort")   ────────> [Client displays immediately]
-                     ├──> Chunk 3 (" is...") ────────> [Client displays immediately]
-                     └──> Connection closes
+Standard HTTP:
+[User Prompt] ──> [Server waits 6s for LLM to finish] ──> [Single Large Response Payload]
 ```
 
-### The 4 Pillars of the Implementation:
+### 2. How the Frontend Consumes the Stream Incrementally
 
-1. **Google GenAI Async Stream (`client.aio.models.generate_content_stream`)**:
-   - Instead of blocking on `generate_content()`, the Google GenAI SDK opens an asynchronous HTTP/2 or gRPC streaming connection to Google's model servers.
-   - Tokens generated by the model are emitted in small token clusters (`AsyncIterator[GenerateContentResponse]`).
+With streaming, tokens are rendered in the browser in real time as they leave the model:
 
-2. **Python Asynchronous Generator (`async def` with `yield`)**:
-   - In `backend/chat.py`, `generate_gemini_stream` is an asynchronous generator function.
-   - When each chunk arrives from Gemini, the function executes `yield chunk.text`. Control is temporarily yielded back to the event loop without waiting for subsequent tokens.
+```text
+Streaming Architecture:
+[User Prompt] ──> [FastAPI opens HTTP connection]
+                    │
+                    ├──> Chunk 1 ("To")     ──> [Browser ReadableStream reader.read()] ──> State += "To"     ──> [Renders]
+                    ├──> Chunk 2 (" solve") ──> [Browser ReadableStream reader.read()] ──> State += " solve" ──> [Renders]
+                    ├──> Chunk 3 (" this,") ──> [Browser ReadableStream reader.read()] ──> State += " this," ──> [Renders]
+                    │    ...
+                    └──> Stream Done (Connection closes)
+```
 
-3. **HTTP Chunked Transfer Encoding (`Transfer-Encoding: chunked`)**:
-   - When FastAPI's `StreamingResponse` receives a generator, it omits the `Content-Length` header (since total response size is unknown upfront).
-   - In HTTP/1.1, omitting `Content-Length` switches the connection to **Chunked Transfer Encoding**.
-   - Starlette/Uvicorn immediately writes each chunk's length and byte content to the TCP socket and flushes it.
+Here is the exact step-by-step mechanism in `frontend/src/components/ChatWindow.jsx`:
 
-4. **Buffering Prevention Headers**:
-   - `Cache-Control: no-cache`: Prevents intermediary proxies and CDNs from caching.
-   - `X-Accel-Buffering: no`: Instructs reverse proxies (like Nginx) and load balancers to disable response buffering so every byte reaches the client in real time.
-   - `curl -N`: Disables client-side buffering so the terminal displays tokens as they land on the socket.
+1. **`fetch` without buffering:**
+   ```javascript
+   const response = await fetch('http://localhost:8000/chat', {
+     method: 'POST',
+     headers: { 'Content-Type': 'application/json' },
+     body: JSON.stringify({ message: promptText }),
+     signal: abortController.signal,
+   });
+   ```
+   Unlike `await response.text()` or `await response.json()` (which deliberately buffer the full payload until EOF), the browser's `response.body` exposes a raw `ReadableStream`.
+
+2. **Reading the stream with `ReadableStreamDefaultReader`:**
+   ```javascript
+   const reader = response.body.getReader();
+   const decoder = new TextDecoder('utf-8');
+   ```
+   The `reader.read()` method returns a Promise that resolves whenever **at least one TCP network packet with payload bytes arrives**, rather than waiting for connection termination.
+
+3. **Incremental loop & React State updates:**
+   ```javascript
+   let accumulated = '';
+   while (true) {
+     const { done, value } = await reader.read();
+     if (done) break;
+
+     // Decode byte array Uint8Array to string
+     const chunkText = decoder.decode(value, { stream: true });
+     accumulated += chunkText;
+
+     // Update assistant message state
+     setMessages((prev) =>
+       prev.map((msg) =>
+         msg.id === assistantMessageId
+           ? { ...msg, content: accumulated }
+           : msg
+       )
+     );
+   }
+   ```
+   - `{ value }` is a `Uint8Array` containing the bytes emitted by FastAPI in that HTTP chunk.
+   - `decoder.decode(value, { stream: true })` turns raw bytes into text without cutting multi-byte UTF-8 code points in half.
+   - Each iteration updates React state (`messages`), triggering an immediate component re-render.
+   - Users visually see each word and code snippet appear in real time with virtually zero latency.
 
 ---
 
 ## 🛣️ 5-Day Roadmap
 
 - [x] **Day 1: Backend Foundation & Streaming Chat Endpoint** (FastAPI, Gemini SDK streaming, CORS, SSE & chunked HTTP).
-- [ ] **Day 2: Modern Frontend** (Vite + React / Vanilla UI with real-time token rendering and code formatting).
+- [x] **Day 2: Modern Frontend** (React + Vite, Tailwind CSS, streaming token-by-token rendering, markdown code blocks).
 - [ ] **Day 3: Database & Persistence** (SQLite / PostgreSQL with conversation history and problem stats).
 - [ ] **Day 4: RAG & Problem Knowledge Base** (Embeddings, vector store, competitive programming problem indexing).
 - [ ] **Day 5: Tools & Code Execution Sandbox** (Judge/Compiler execution, test cases, algorithmic analysis).
