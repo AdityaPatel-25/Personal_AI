@@ -51,5 +51,12 @@ async def root():
         "docs": "/docs",
         "endpoints": {
             "chat": "POST /chat",
+            "conversations": "GET, POST /conversations",
+            "conversation_detail": "GET, DELETE /conversations/{conversation_id}",
+            "rag_status": "GET /rag/status",
+            "rag_query": "GET /rag/query?q={query}&top_k={k}",
+            "rag_index": "POST /rag/index",
         },
     }
+
+

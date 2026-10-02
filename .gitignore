@@ -21,6 +21,18 @@ ENV/
 .idea/
 *.swp
 
+# SQLite Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+backend/*.db
+
+# Vector Store / ChromaDB
+chroma_db/
+backend/chroma_db/
+
+
 # Node / Frontend
 node_modules/
 dist/

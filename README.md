@@ -1,6 +1,6 @@
 # Personal AI — Competitive Programming & DSA Coach
 
-> **Day 2 Milestone:** Interactive, modern React + Vite frontend styled with Tailwind CSS, connected to the asynchronous streaming chat endpoint powered by Google Gemini and FastAPI.
+> **Day 4 Milestone:** RAG (Retrieval-Augmented Generation) knowledge base pipeline using ChromaDB (persistent vector store), Gemini embeddings (`gemini-embedding-001`), configurable text chunking with paragraph awareness, automated & manual indexing CLI (`scripts/index_data.py`), sample topic notes in `/data`, and context-augmented streaming chat.
 
 ---
 
@@ -9,14 +9,22 @@
 ```text
 Personal_AI/
 ├── .env.example              # Example environment variables (API key)
-├── README.md                 # Setup, run commands, curl testing & architecture
+├── README.md                 # Setup, run commands, RAG testing & architecture
+├── data/                     # DSA topic notes for RAG indexing
+│   ├── dynamic_programming.md
+│   ├── graph_algorithms.md
+│   ├── binary_search.md
+│   └── trees_and_heaps.md
+├── scripts/
+│   └── index_data.py         # CLI script to (re)index notes & test retrieval
 ├── backend/
 │   ├── main.py               # FastAPI application, CORS setup & router registration
-│   ├── chat.py               # Gemini streaming logic & /chat endpoint
-│   ├── rag.py                # Placeholder for Day 4: RAG & Problem Knowledge Base
-│   ├── db.py                 # Placeholder for Day 3: Database & Chat Sessions
+│   ├── chat.py               # Gemini streaming logic, multi-turn context, RAG injection
+│   ├── db.py                 # SQLite database persistence (conversations & messages)
+│   ├── rag.py                # RAG pipeline: ChromaDB vector store & Gemini embeddings
 │   ├── tools.py              # Placeholder for Day 5: Code Execution Sandbox & Tools
-│   ├── requirements.txt      # Python dependencies
+│   ├── chroma_db/            # Persistent ChromaDB vector database files
+│   ├── requirements.txt      # Python dependencies (including chromadb)
 │   └── .env.example          # Backend-local env template
 └── frontend/
     ├── index.html            # Main HTML with Google Fonts (Inter, JetBrains Mono)
@@ -27,10 +35,12 @@ Personal_AI/
         ├── App.jsx           # Root application component
         ├── index.css         # Tailwind directives, animations & custom scrollbars
         └── components/
-            ├── ChatWindow.jsx   # Top-level state orchestration & streaming fetch logic
+            ├── Sidebar.jsx      # Conversation history drawer, new chat & deletion
+            ├── ChatWindow.jsx   # Top-level state orchestration, DB sync & streaming
             ├── MessageList.jsx  # Conversation bubbles, markdown formatting, copy code
             └── MessageInput.jsx # Input textarea, keybindings (Enter/Shift+Enter), send/stop
 ```
+
 
 ---
 
@@ -239,10 +249,43 @@ Here is the exact step-by-step mechanism in `frontend/src/components/ChatWindow.
 
 ---
 
+## 📚 Day 4: RAG Pipeline, Indexing & Verification
+
+### 1. (Re)Index DSA Notes into ChromaDB
+Whenever you add or edit markdown notes in `/data`, run the indexing script:
+
+```bash
+# Default parameters (chunk_size=600, overlap=120):
+python scripts/index_data.py
+```
+
+### 2. Verify Semantic Retrieval from the Terminal
+Test which chunks are retrieved for any question without starting the full server:
+
+```bash
+python scripts/index_data.py --query "How do I choose between BFS and DFS for graphs?" --test-only
+```
+
+### 3. Experiment with Custom Chunking Parameters
+```bash
+python scripts/index_data.py --chunk-size 800 --chunk-overlap 150 --query "What is 0/1 knapsack space optimization?"
+```
+
+### 4. RAG REST API Inspection Endpoints
+- **Check vector store status & count:**
+  `curl http://localhost:8000/rag/status`
+- **Inspect top-K retrieved chunks via HTTP:**
+  `curl "http://localhost:8000/rag/query?q=Dijkstra&top_k=3"`
+- **Response Headers:**
+  Calls to `POST /chat` automatically include `X-Rag-Chunks` and `X-Rag-Sources` headers showing which notes grounded the AI coach's response.
+
+---
+
 ## 🛣️ 5-Day Roadmap
 
 - [x] **Day 1: Backend Foundation & Streaming Chat Endpoint** (FastAPI, Gemini SDK streaming, CORS, SSE & chunked HTTP).
 - [x] **Day 2: Modern Frontend** (React + Vite, Tailwind CSS, streaming token-by-token rendering, markdown code blocks).
-- [ ] **Day 3: Database & Persistence** (SQLite / PostgreSQL with conversation history and problem stats).
-- [ ] **Day 4: RAG & Problem Knowledge Base** (Embeddings, vector store, competitive programming problem indexing).
+- [x] **Day 3: Database & Persistence** (SQLite conversations and messages schema, REST endpoints, multi-turn Gemini context, responsive history sidebar).
+- [x] **Day 4: RAG & Problem Knowledge Base** (ChromaDB persistent vector store, Gemini embeddings, configurable chunking, notes indexing, prompt context injection).
 - [ ] **Day 5: Tools & Code Execution Sandbox** (Judge/Compiler execution, test cases, algorithmic analysis).
+

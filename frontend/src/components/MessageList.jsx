@@ -171,13 +171,25 @@ export default function MessageList({
                     : 'bg-slate-900/85 border border-slate-800/90 text-slate-100 rounded-tl-sm shadow-black/20'
                 }`}
               >
-                {/* Header label */}
-                <div
-                  className={`text-[11px] font-semibold mb-1 tracking-wider uppercase ${
-                    isUser ? 'text-indigo-200' : 'text-indigo-400'
-                  }`}
-                >
-                  {isUser ? 'You' : 'Algo Coach'}
+                {/* Header label & RAG sources pill */}
+                <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                  <div
+                    className={`text-[11px] font-semibold tracking-wider uppercase ${
+                      isUser ? 'text-indigo-200' : 'text-indigo-400'
+                    }`}
+                  >
+                    {isUser ? 'You' : 'Algo Coach'}
+                  </div>
+                  {!isUser && msg.rag_sources && (
+                    <div
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/25 text-[10px] text-emerald-300 font-mono"
+                      title={`Retrieved from: ${msg.rag_sources}`}
+                    >
+                      <BookOpen className="w-2.5 h-2.5 text-emerald-400" />
+                      <span>Grounded in: {msg.rag_sources}</span>
+                      {msg.rag_chunks && <span className="text-emerald-400/80">({msg.rag_chunks} chunks)</span>}
+                    </div>
+                  )}
                 </div>
 
                 {/* Content */}
