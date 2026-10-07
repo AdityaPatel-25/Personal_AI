@@ -4,7 +4,7 @@ Provides:
 - Document loading for markdown (.md) and text (.txt) DSA topic notes
 - Configurable text chunking with adjustable chunk size and overlap
 - Persistent ChromaDB vector store integration
-- Gemini API embeddings (gemini-embedding-001)
+- Local sentence-transformers embeddings (all-MiniLM-L6-v2)
 - Manual/automated indexing pipeline
 - Semantic retrieval (retrieve) for augmenting DSA chat prompts
 """
@@ -18,7 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import chromadb
 from dotenv import find_dotenv, load_dotenv
-from google import genai
+from sentence_transformers import SentenceTransformer
 
 # Load environment variables (.env in workspace or parent directory)
 load_dotenv(find_dotenv(usecwd=True))
@@ -34,8 +34,8 @@ DEFAULT_CHROMA_PATH = os.path.join(BACKEND_DIR, "chroma_db")
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", DEFAULT_CHROMA_PATH)
 CHROMA_COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME", "dsa_notes")
 
-# Default Embedding Model: gemini-embedding-001 is stable on v1beta API
-DEFAULT_EMBEDDING_MODEL = os.getenv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001")
+# Default Embedding Model: all-MiniLM-L6-v2 (fast, 384 dims, runs locally on CPU)
+DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
 # Default Chunking Parameters (in characters)
 # 600 chars (~100-150 words) captures a complete concept/pattern snippet
@@ -45,70 +45,44 @@ DEFAULT_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "120"))
 
 
 # ============================================================================
-# Gemini Client & Embeddings
+# Local Sentence-Transformers Embeddings
 # ============================================================================
 
+_embedding_model_instance: Optional[SentenceTransformer] = None
 
-def get_gemini_client() -> genai.Client:
-    """Instantiates and returns the Google GenAI client."""
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key or api_key.strip() in ("", "your_actual_key_here"):
-        raise ValueError(
-            "GEMINI_API_KEY is not set or invalid in environment/.env file."
-        )
-    return genai.Client(api_key=api_key.strip())
+
+def get_embedding_model(model_name: Optional[str] = None) -> SentenceTransformer:
+    """Instantiates and caches the local SentenceTransformer embedding model."""
+    global _embedding_model_instance
+    target_model = model_name or DEFAULT_EMBEDDING_MODEL
+    if _embedding_model_instance is None:
+        logger.info("Loading local sentence-transformers model '%s'...", target_model)
+        _embedding_model_instance = SentenceTransformer(target_model)
+    return _embedding_model_instance
 
 
 def embed_texts(
     texts: List[str],
     model: Optional[str] = None,
-    batch_size: int = 30,
+    batch_size: int = 32,
 ) -> List[List[float]]:
-    """Generates embedding vectors for a list of strings using the Gemini API.
+    """Generates embedding vectors for a list of strings using local sentence-transformers model.
 
-    Handles batching to avoid API payload size limits and retries alternate model names
-    if the primary model encounters version differences.
+    Runs locally without API keys or remote network calls.
+    Returns:
+        List of 384-dimensional float vectors (for all-MiniLM-L6-v2).
     """
     if not texts:
         return []
 
-    client = get_gemini_client()
-    selected_model = model or DEFAULT_EMBEDDING_MODEL
-
-    candidate_models = [selected_model]
-    for fallback in ["gemini-embedding-001", "models/gemini-embedding-001", "gemini-embedding-2-preview"]:
-        if fallback not in candidate_models:
-            candidate_models.append(fallback)
-
-    all_embeddings: List[List[float]] = []
-
-    for i in range(0, len(texts), batch_size):
-        batch = texts[i : i + batch_size]
-        batch_success = False
-        last_error = None
-
-        for mod in candidate_models:
-            try:
-                response = client.models.embed_content(
-                    model=mod,
-                    contents=batch,
-                )
-                if response and response.embeddings:
-                    for emb in response.embeddings:
-                        all_embeddings.append(list(emb.values))
-                    batch_success = True
-                    break
-            except Exception as exc:
-                last_error = exc
-                logger.debug("Model %s failed for batch (%s). Trying next...", mod, exc)
-                continue
-
-        if not batch_success:
-            raise RuntimeError(
-                f"Failed to generate embeddings via Gemini API: {last_error}"
-            )
-
-    return all_embeddings
+    transformer = get_embedding_model(model)
+    embeddings = transformer.encode(
+        texts,
+        batch_size=batch_size,
+        show_progress_bar=False,
+        normalize_embeddings=True,
+    )
+    return embeddings.tolist()
 
 
 def embed_query(query: str, model: Optional[str] = None) -> List[float]:
@@ -343,19 +317,27 @@ def chunk_documents(
 
 def get_chroma_client() -> chromadb.PersistentClient:
     """Returns a persistent ChromaDB client pointing to the local storage directory."""
-    os.makedirs(CHROMA_DB_PATH, exist_ok=True)
-    return chromadb.PersistentClient(path=CHROMA_DB_PATH)
+    try:
+        os.makedirs(CHROMA_DB_PATH, exist_ok=True)
+        return chromadb.PersistentClient(path=CHROMA_DB_PATH)
+    except Exception as e:
+        logger.error("Failed to initialize ChromaDB client at '%s': %s", CHROMA_DB_PATH, e, exc_info=True)
+        raise
 
 
 def get_or_create_collection(
     collection_name: str = CHROMA_COLLECTION_NAME,
 ) -> chromadb.Collection:
     """Retrieves or creates a ChromaDB collection with cosine distance metric."""
-    client = get_chroma_client()
-    return client.get_or_create_collection(
-        name=collection_name,
-        metadata={"hnsw:space": "cosine"},
-    )
+    try:
+        client = get_chroma_client()
+        return client.get_or_create_collection(
+            name=collection_name,
+            metadata={"hnsw:space": "cosine"},
+        )
+    except Exception as e:
+        logger.error("Failed to get or create collection '%s': %s", collection_name, e, exc_info=True)
+        raise
 
 
 # ============================================================================
@@ -412,8 +394,9 @@ def index_data(
 
     # 3. Generate embeddings
     texts = [c["text"] for c in chunks]
-    logger.info("Generating Gemini embeddings for %d text chunks...", len(texts))
-    embeddings = embed_texts(texts, model=embedding_model)
+    active_model = embedding_model or DEFAULT_EMBEDDING_MODEL
+    logger.info("Generating local embeddings (%s) for %d text chunks...", active_model, len(texts))
+    embeddings = embed_texts(texts, model=active_model)
 
     # 4. Store in ChromaDB
     client = get_chroma_client()
@@ -432,12 +415,32 @@ def index_data(
     ids = [c["id"] for c in chunks]
     metadatas = [c["metadata"] for c in chunks]
 
-    collection.add(
-        ids=ids,
-        documents=texts,
-        embeddings=embeddings,
-        metadatas=metadatas,
-    )
+    try:
+        collection.add(
+            ids=ids,
+            documents=texts,
+            embeddings=embeddings,
+            metadatas=metadatas,
+        )
+    except Exception as exc:
+        if "dimension" in str(exc).lower():
+            logger.warning(
+                "Dimensionality mismatch in collection '%s'. Deleting and recreating with new dimensions...",
+                CHROMA_COLLECTION_NAME,
+            )
+            client.delete_collection(name=CHROMA_COLLECTION_NAME)
+            collection = client.get_or_create_collection(
+                name=CHROMA_COLLECTION_NAME,
+                metadata={"hnsw:space": "cosine"},
+            )
+            collection.add(
+                ids=ids,
+                documents=texts,
+                embeddings=embeddings,
+                metadatas=metadatas,
+            )
+        else:
+            raise exc
 
     logger.info(
         "Successfully indexed %d chunks from %d document(s) into ChromaDB ('%s').",
@@ -454,7 +457,7 @@ def index_data(
         "chunk_overlap": chunk_overlap,
         "collection_name": CHROMA_COLLECTION_NAME,
         "chroma_db_path": CHROMA_DB_PATH,
-        "embedding_model": embedding_model or DEFAULT_EMBEDDING_MODEL,
+        "embedding_model": active_model,
         "documents": [d["source"] for d in docs],
     }
 
@@ -485,32 +488,52 @@ def retrieve(
     if not clean_query:
         return []
 
-    client = get_chroma_client()
+    logger.info("RAG retrieval running for query: '%s' (top_k=%d, collection='%s')", clean_query[:60], top_k, collection_name)
+
     try:
+        client = get_chroma_client()
         collection = client.get_collection(name=collection_name)
-    except Exception:
-        logger.warning("ChromaDB collection '%s' not found. Run index_data first.", collection_name)
+    except Exception as exc:
+        logger.warning("ChromaDB collection '%s' unavailable or not found: %s", collection_name, exc)
         return []
 
-    total_count = collection.count()
+    try:
+        total_count = collection.count()
+    except Exception as cnt_err:
+        logger.error("Failed to count ChromaDB collection '%s': %s", collection_name, cnt_err)
+        return []
+
     if total_count == 0:
-        logger.info("ChromaDB collection '%s' is empty.", collection_name)
+        logger.info("ChromaDB collection '%s' is empty; 0 chunks retrieved.", collection_name)
         return []
 
     actual_k = min(top_k, total_count)
 
-    # 1. Embed query
-    query_vector = embed_query(clean_query, model=embedding_model)
+    # 1. Embed query with error protection
+    try:
+        query_vector = embed_query(clean_query, model=embedding_model)
+    except Exception as emb_err:
+        logger.error("Failed to generate embedding for query '%s': %s", clean_query[:50], emb_err, exc_info=True)
+        return []
 
-    # 2. Query collection
-    results = collection.query(
-        query_embeddings=[query_vector],
-        n_results=actual_k,
-        include=["documents", "metadatas", "distances"],
-    )
+    # 2. Query collection with error protection
+    try:
+        results = collection.query(
+            query_embeddings=[query_vector],
+            n_results=actual_k,
+            include=["documents", "metadatas", "distances"],
+        )
+    except Exception as query_err:
+        logger.error(
+            "ChromaDB retrieval query failed (if dimension changed, please re-index data via scripts/index_data.py): %s",
+            query_err,
+            exc_info=True,
+        )
+        return []
 
     retrieved: List[Dict[str, Any]] = []
     if not results or not results.get("documents") or not results["documents"][0]:
+        logger.info("RAG retrieval completed: found 0 chunks for query: '%s'", clean_query[:60])
         return []
 
     docs = results["documents"][0]
@@ -534,6 +557,12 @@ def retrieve(
             }
         )
 
+    sources = sorted({c.get("source", "DSA Notes") for c in retrieved})
+    logger.info(
+        "RAG retrieval completed: found %d relevant chunk(s) from sources: %s",
+        len(retrieved),
+        ", ".join(sources),
+    )
     return retrieved
 
 

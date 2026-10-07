@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Plus,
   MessageSquare,
@@ -6,7 +6,16 @@ import {
   X,
   Code2,
   Clock,
+  ChevronRight,
+  Check,
+  Sparkles,
+  Sliders,
+  User,
+  Settings,
+  HelpCircle,
+  LogOut,
 } from 'lucide-react';
+import { GoogleLogo } from './GoogleAuthModal';
 
 function formatTimestamp(timestampStr) {
   if (!timestampStr) return '';
@@ -41,7 +50,40 @@ export default function Sidebar({
   onDeleteConversation,
   isOpen,
   onToggleOpen,
+  user,
+  accounts = [],
+  onSelectAccount,
+  onOpenGoogleLogin,
+  onLogout,
+  onOpenPersonalization,
+  onOpenSettings,
+  onOpenUpgrade,
 }) {
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const menuRef = useRef(null);
+  const profileButtonRef = useRef(null);
+
+  // Close profile popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(event.target) &&
+        profileButtonRef.current &&
+        !profileButtonRef.current.contains(event.target)
+      ) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    if (showProfileMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProfileMenu]);
+
   return (
     <>
       {/* Mobile Backdrop overlay */}
@@ -55,8 +97,10 @@ export default function Sidebar({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-40 w-72 bg-[#0d121d] border-r border-slate-800/80 flex flex-col transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
-          isOpen ? 'translate-x-0 shadow-2xl shadow-black/80' : '-translate-x-full'
+        className={`fixed top-0 bottom-0 left-0 z-40 w-72 bg-[#0d121d] border-r border-slate-800/80 flex flex-col transition-all duration-300 ease-in-out shrink-0 ${
+          isOpen
+            ? 'translate-x-0 shadow-2xl shadow-black/80 lg:shadow-none lg:static lg:translate-x-0'
+            : '-translate-x-full lg:-ml-72'
         }`}
       >
         {/* Sidebar Header & Brand */}
@@ -169,9 +213,183 @@ export default function Sidebar({
           )}
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="p-3 border-t border-slate-800/80 text-[11px] text-slate-500 text-center font-mono">
-          SQLite Persistent Storage
+        {/* ChatGPT-Style Profile Footer with Popup Menu */}
+        <div className="relative p-2.5 border-t border-slate-800/80 bg-[#0b0e17]/80">
+          {/* Floating ChatGPT-Style Popup Menu */}
+          {showProfileMenu && user && (
+            <div
+              ref={menuRef}
+              className="absolute bottom-16 left-2 right-2 rounded-2xl bg-[#171b26] border border-slate-700/80 shadow-2xl p-1.5 z-50 text-slate-200 animate-fadeIn space-y-1"
+            >
+              {/* Account Switcher Subcard */}
+              <div className="p-1.5 rounded-xl bg-slate-900/80 border border-slate-800/90 space-y-1">
+                {accounts.map((acc) => {
+                  const isActive = user?.id === acc.id || user?.email === acc.email;
+                  return (
+                    <button
+                      key={acc.id}
+                      onClick={() => {
+                        onSelectAccount?.(acc);
+                        setShowProfileMenu(false);
+                      }}
+                      className={`w-full flex items-center justify-between p-2 rounded-lg text-left transition-colors cursor-pointer ${
+                        isActive
+                          ? 'bg-slate-800/90 text-white'
+                          : 'hover:bg-slate-800/50 text-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={`w-7 h-7 rounded-full ${
+                            acc.avatarColor || 'bg-emerald-600'
+                          } text-white font-semibold text-[11px] flex items-center justify-center shrink-0`}
+                        >
+                          {acc.initials || 'AP'}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-medium text-xs text-white truncate leading-tight">
+                            {acc.name}
+                          </p>
+                          <p className="text-[10px] text-slate-400 truncate leading-tight">
+                            {acc.email}
+                          </p>
+                        </div>
+                      </div>
+
+                      {isActive && (
+                        <Check className="w-3.5 h-3.5 text-slate-200 shrink-0 ml-1" />
+                      )}
+                    </button>
+                  );
+                })}
+
+                {/* + Add account */}
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    onOpenGoogleLogin?.();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4 text-slate-400" />
+                  <span className="font-medium text-xs">Add account</span>
+                </button>
+              </div>
+
+              {/* Menu items */}
+              <div className="py-1 space-y-0.5 text-xs">
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    onOpenUpgrade?.();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-indigo-400" />
+                  <span>Upgrade plan</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    onOpenPersonalization?.();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left cursor-pointer"
+                >
+                  <Sliders className="w-4 h-4 text-slate-400" />
+                  <span>Personalization</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    onOpenSettings?.();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left cursor-pointer"
+                >
+                  <User className="w-4 h-4 text-slate-400" />
+                  <span>Profile</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    onOpenSettings?.();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left cursor-pointer"
+                >
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <span>Settings</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    alert(
+                      'AlgoCoach AI Help:\n• Type algorithm questions to get step-by-step intuition.\n• Use the mic button for voice dictation via Groq Whisper.\n• Notes and ChromaDB vector store automatically ground responses.'
+                    );
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/70 transition-colors text-left cursor-pointer"
+                >
+                  <HelpCircle className="w-4 h-4 text-slate-400" />
+                  <span>Help</span>
+                </button>
+
+                <div className="my-1 border-t border-slate-800" />
+
+                <button
+                  onClick={() => {
+                    setShowProfileMenu(false);
+                    onLogout?.();
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-rose-300 hover:text-rose-200 hover:bg-rose-500/10 transition-colors text-left cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4 text-rose-400" />
+                  <span>Log out</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Profile Trigger Button at Bottom of Sidebar */}
+          {user ? (
+            <button
+              ref={profileButtonRef}
+              onClick={() => setShowProfileMenu((prev) => !prev)}
+              className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-slate-800/70 transition-colors text-left group cursor-pointer border border-transparent hover:border-slate-800"
+              title="Account settings & switcher"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                {/* Circular Avatar */}
+                <div
+                  className={`w-8 h-8 rounded-full ${
+                    user.avatarColor || 'bg-emerald-600'
+                  } text-white font-semibold text-xs flex items-center justify-center shrink-0 shadow-sm`}
+                >
+                  {user.initials || 'AP'}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-xs text-white truncate leading-tight group-hover:text-indigo-200">
+                    {user.name || 'Aditya Patel'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 truncate leading-tight">
+                    {user.plan || 'Go'}
+                  </p>
+                </div>
+              </div>
+
+              <ChevronRight className="w-4 h-4 text-slate-500 group-hover:text-slate-300 transition-colors shrink-0" />
+            </button>
+          ) : (
+            /* Sign In with Google Prompt when logged out */
+            <button
+              onClick={onOpenGoogleLogin}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-medium text-xs shadow-md transition-colors cursor-pointer"
+            >
+              <GoogleLogo className="w-4 h-4" />
+              <span>Sign in with Google</span>
+            </button>
+          )}
         </div>
       </aside>
     </>

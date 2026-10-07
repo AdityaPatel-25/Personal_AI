@@ -1,6 +1,6 @@
 # Personal AI — Competitive Programming & DSA Coach
 
-> **Day 4 Milestone:** RAG (Retrieval-Augmented Generation) knowledge base pipeline using ChromaDB (persistent vector store), Gemini embeddings (`gemini-embedding-001`), configurable text chunking with paragraph awareness, automated & manual indexing CLI (`scripts/index_data.py`), sample topic notes in `/data`, and context-augmented streaming chat.
+> **Milestone:** Chat & generation powered by Groq (`llama-3.3-70b-versatile`), RAG knowledge base pipeline using ChromaDB (persistent vector store) powered by local `sentence-transformers` embeddings (`all-MiniLM-L6-v2`), configurable text chunking with paragraph awareness, automated & manual indexing CLI (`scripts/index_data.py`), sample topic notes in `/data`, and context-augmented streaming chat.
 
 ---
 
@@ -19,12 +19,12 @@ Personal_AI/
 │   └── index_data.py         # CLI script to (re)index notes & test retrieval
 ├── backend/
 │   ├── main.py               # FastAPI application, CORS setup & router registration
-│   ├── chat.py               # Gemini streaming logic, multi-turn context, RAG injection
+│   ├── chat.py               # Groq streaming logic (llama-3.3-70b-versatile), multi-turn context, RAG injection
 │   ├── db.py                 # SQLite database persistence (conversations & messages)
-│   ├── rag.py                # RAG pipeline: ChromaDB vector store & Gemini embeddings
+│   ├── rag.py                # RAG pipeline: ChromaDB vector store & local sentence-transformers embeddings
 │   ├── tools.py              # Placeholder for Day 5: Code Execution Sandbox & Tools
 │   ├── chroma_db/            # Persistent ChromaDB vector database files
-│   ├── requirements.txt      # Python dependencies (including chromadb)
+│   ├── requirements.txt      # Python dependencies (groq, sentence-transformers, chromadb)
 │   └── .env.example          # Backend-local env template
 └── frontend/
     ├── index.html            # Main HTML with Google Fonts (Inter, JetBrains Mono)
@@ -49,7 +49,7 @@ Personal_AI/
 ### 1. Prerequisites
 - **Python 3.10+** (tested on Python 3.14)
 - **Node.js 18+** & **npm** (tested on Node v25 / npm 11)
-- A Google Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+- A Groq API key from [Groq Console](https://console.groq.com/keys)
 
 ---
 
@@ -81,10 +81,10 @@ Copy `.env.example` to `.env` in the root directory:
 cp .env.example .env
 ```
 
-Open `.env` and set your Gemini API key:
+Open `.env` and set your Groq API key:
 ```env
-GEMINI_API_KEY=AIzaSy...your_actual_key_here
-GEMINI_MODEL=gemini-2.5-pro
+GROQ_API_KEY=gsk_your_actual_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
 ---
@@ -249,13 +249,15 @@ Here is the exact step-by-step mechanism in `frontend/src/components/ChatWindow.
 
 ---
 
-## 📚 Day 4: RAG Pipeline, Indexing & Verification
+## 📚 RAG Pipeline, Indexing & Verification
+
+> ⚠️ **Important Re-indexing Notice:** The embedding provider uses a local `sentence-transformers` model (`all-MiniLM-L6-v2`, 384 dimensions). Because vector dimensions changed from the legacy 768/1536-dim embeddings, the ChromaDB collection must be re-indexed from scratch. Running `python scripts/index_data.py` automatically resets and rebuilds the collection cleanly.
 
 ### 1. (Re)Index DSA Notes into ChromaDB
-Whenever you add or edit markdown notes in `/data`, run the indexing script:
+To rebuild the collection from scratch with the local embedding model:
 
 ```bash
-# Default parameters (chunk_size=600, overlap=120):
+# Clean rebuild with default chunking (chunk_size=600, overlap=120):
 python scripts/index_data.py
 ```
 
@@ -271,21 +273,27 @@ python scripts/index_data.py --query "How do I choose between BFS and DFS for gr
 python scripts/index_data.py --chunk-size 800 --chunk-overlap 150 --query "What is 0/1 knapsack space optimization?"
 ```
 
-### 4. RAG REST API Inspection Endpoints
+### 4. RAG & Tools REST API Inspection Endpoints
 - **Check vector store status & count:**
   `curl http://localhost:8000/rag/status`
 - **Inspect top-K retrieved chunks via HTTP:**
   `curl "http://localhost:8000/rag/query?q=Dijkstra&top_k=3"`
+- **List registered action tools:**
+  `curl http://localhost:8000/tools`
+- **Execute an action tool:**
+  `curl -X POST http://localhost:8000/tools/execute -H "Content-Type: application/json" -d '{"name": "suggest_problem", "arguments": {"topic": "dynamic_programming"}}'`
 - **Response Headers:**
   Calls to `POST /chat` automatically include `X-Rag-Chunks` and `X-Rag-Sources` headers showing which notes grounded the AI coach's response.
 
 ---
 
-## 🛣️ 5-Day Roadmap
+## 🛣️ Development Roadmap
 
-- [x] **Day 1: Backend Foundation & Streaming Chat Endpoint** (FastAPI, Gemini SDK streaming, CORS, SSE & chunked HTTP).
+- [x] **Day 1: Backend Foundation & Streaming Chat Endpoint** (FastAPI, Groq SDK streaming with `llama-3.3-70b-versatile`, CORS, SSE & chunked HTTP).
 - [x] **Day 2: Modern Frontend** (React + Vite, Tailwind CSS, streaming token-by-token rendering, markdown code blocks).
-- [x] **Day 3: Database & Persistence** (SQLite conversations and messages schema, REST endpoints, multi-turn Gemini context, responsive history sidebar).
-- [x] **Day 4: RAG & Problem Knowledge Base** (ChromaDB persistent vector store, Gemini embeddings, configurable chunking, notes indexing, prompt context injection).
-- [ ] **Day 5: Tools & Code Execution Sandbox** (Judge/Compiler execution, test cases, algorithmic analysis).
+- [x] **Day 3: Database & Persistence** (SQLite conversations and messages schema, REST endpoints, multi-turn context, responsive history sidebar).
+- [x] **Day 4: RAG & Problem Knowledge Base** (ChromaDB persistent vector store, local `all-MiniLM-L6-v2` embeddings, configurable chunking, notes indexing, prompt context injection).
+- [x] **Day 5: Action Tools & Function Calling** (Curated problem lookup `suggest_problem`, history struggle analyzer `get_weak_topics`, persistent submission tracker `log_submission`).
+- [x] **Day 6: Polish, Error Handling & System Hardening** (Loading/typing indicator before first token, 30s request timeouts, human-readable error cards, responsive collapsible drawer layout, input validation, try/except error shielding across DB/RAG/Groq, and structured Python logging).
+
 

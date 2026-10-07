@@ -2,9 +2,32 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import Sidebar from './Sidebar';
+import GoogleAuthModal, { GoogleLogo } from './GoogleAuthModal';
+import PersonalizationModal from './PersonalizationModal';
+import UpgradeModal from './UpgradeModal';
+import SettingsModal from './SettingsModal';
 import { Terminal, Trash2, PanelLeft, Plus, Loader2, BookOpen } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+const DEFAULT_ACCOUNTS = [
+  {
+    id: 'acc-1',
+    name: 'Aditya Patel',
+    email: 'pateladityanov.25@gmail.com',
+    initials: 'AP',
+    plan: 'Go',
+    avatarColor: 'bg-emerald-600',
+  },
+  {
+    id: 'acc-2',
+    name: 'Aditya Patel',
+    email: 'pateladityanov.2005@gmail.com',
+    initials: 'AP',
+    plan: 'Go',
+    avatarColor: 'bg-teal-600',
+  },
+];
 
 export default function ChatWindow() {
   const [messages, setMessages] = useState([]);
@@ -16,12 +39,59 @@ export default function ChatWindow() {
   const [backendStatus, setBackendStatus] = useState('checking'); // 'online' | 'offline' | 'checking'
   const [ragInfo, setRagInfo] = useState(null);
 
+  // Google Authentication & Account Switcher State
+  const [accounts, setAccounts] = useState(() => {
+    try {
+      const saved = localStorage.getItem('personal_ai_accounts');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_ACCOUNTS;
+  });
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const saved = localStorage.getItem('personal_ai_active_user');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_ACCOUNTS[0];
+  });
+
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [showPersonalizationModal, setShowPersonalizationModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+
+  const handleSelectAccount = (acc) => {
+    setCurrentUser(acc);
+    localStorage.setItem('personal_ai_active_user', JSON.stringify(acc));
+  };
+
+  const handleAddAccount = (newAcc) => {
+    setAccounts((prev) => {
+      const updated = [...prev.filter((a) => a.email !== newAcc.email), newAcc];
+      localStorage.setItem('personal_ai_accounts', JSON.stringify(updated));
+      return updated;
+    });
+    handleSelectAccount(newAcc);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('personal_ai_active_user');
+    setShowGoogleModal(true);
+  };
+
   // Conversation Management State
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(() => {
     return localStorage.getItem('personal_ai_active_conv') || null;
   });
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 1024;
+    }
+    return false;
+  });
 
   const abortControllerRef = useRef(null);
   const lastPromptRef = useRef('');
@@ -148,6 +218,9 @@ export default function ChatWindow() {
     setActiveConversationId(conversationId);
     localStorage.setItem('personal_ai_active_conv', conversationId);
     loadConversationMessages(conversationId);
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
   };
 
   // 6. Creating a fresh "New Chat"
@@ -159,6 +232,9 @@ export default function ChatWindow() {
     localStorage.removeItem('personal_ai_active_conv');
     setMessages([]);
     setError(null);
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
   };
 
   // 7. Deleting a conversation
@@ -176,9 +252,12 @@ export default function ChatWindow() {
     } catch (err) {
       console.error('Failed to delete conversation:', err);
     }
+    if (window.innerWidth < 1024) {
+      setSidebarOpen(false);
+    }
   };
 
-  // 8. Sending a message with persistent conversation memory
+  // 8. Sending a message with persistent conversation memory & 30s timeout
   const handleSendMessage = async (textToSend) => {
     const trimmed = textToSend.trim();
     if (!trimmed || isLoading || isStreaming) return;
@@ -206,6 +285,17 @@ export default function ChatWindow() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    // 30-second timeout for first token/response
+    let timeoutTriggered = false;
+    const timeoutId = setTimeout(() => {
+      timeoutTriggered = true;
+      try {
+        controller.abort('timeout');
+      } catch {
+        controller.abort();
+      }
+    }, 30000);
+
     try {
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
@@ -219,20 +309,47 @@ export default function ChatWindow() {
         signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
         let errorDetail = `HTTP ${response.status} ${response.statusText}`;
         try {
           const errorJson = await response.json();
           if (errorJson?.detail) {
-            errorDetail =
-              typeof errorJson.detail === 'string'
-                ? errorJson.detail
-                : JSON.stringify(errorJson.detail);
+            if (typeof errorJson.detail === 'string') {
+              errorDetail = errorJson.detail;
+            } else if (Array.isArray(errorJson.detail)) {
+              errorDetail = errorJson.detail.map((d) => d.msg || JSON.stringify(d)).join('; ');
+            } else {
+              errorDetail = JSON.stringify(errorJson.detail);
+            }
           }
         } catch {
           // If response body is not JSON, leave errorDetail as is
         }
-        throw new Error(errorDetail);
+
+        let errorTitle = `AI Provider Error (HTTP ${response.status})`;
+        let helpText = 'Please check backend logs or retry.';
+        if (response.status === 400 || response.status === 422) {
+          errorTitle = `Request Validation Error (${response.status})`;
+          helpText = 'Ensure your message is not empty or malformed.';
+        } else if (response.status === 401) {
+          errorTitle = 'Invalid API Key (401)';
+          helpText = 'Check GROQ_API_KEY in your .env file.';
+        } else if (response.status === 429) {
+          errorTitle = 'Groq Rate Limit Reached (429)';
+          helpText = 'Please wait a moment and click Retry.';
+        } else if (response.status >= 500) {
+          errorTitle = `Server Internal Error (${response.status})`;
+          helpText = 'Inspect your FastAPI terminal console for the traceback.';
+        }
+
+        throw {
+          title: errorTitle,
+          message: errorDetail,
+          help: helpText,
+          type: 'server',
+        };
       }
 
       // Read active conversation ID and RAG source headers
@@ -319,17 +436,48 @@ export default function ChatWindow() {
       // Refresh sidebar conversations to display updated title / timestamps
       fetchConversations();
     } catch (err) {
-      if (err.name === 'AbortError') {
+      clearTimeout(timeoutId);
+      const isTimeout =
+        timeoutTriggered ||
+        (controller && controller.signal?.reason === 'timeout') ||
+        (err && String(err.message || '').toLowerCase().includes('timeout'));
+
+      if (err.name === 'AbortError' && !isTimeout) {
         console.log('Stream aborted by user');
+      } else if (isTimeout) {
+        console.warn('Chat request timed out after 30s');
+        setError({
+          title: 'Request Timed Out (30s)',
+          message: 'The AI coach took longer than 30 seconds to stream a response.',
+          help: 'Check your internet connection or verify the backend is running, then click Retry.',
+          type: 'timeout',
+        });
+      } else if (err.type === 'server') {
+        setError(err);
+      } else if (
+        err instanceof TypeError ||
+        String(err.message || '').includes('Failed to fetch') ||
+        String(err.message || '').includes('NetworkError')
+      ) {
+        console.error('Backend unreachable:', err);
+        setError({
+          title: 'Backend Unreachable (Port 8000)',
+          message: `Could not connect to FastAPI server at ${API_BASE_URL}. Ensure the backend is running.`,
+          help: 'Start server in terminal: uvicorn backend.main:app --reload --port 8000',
+          type: 'network',
+        });
+        setBackendStatus('offline');
       } else {
         console.error('Chat error:', err);
-        setError(
-          err.message ||
-            'Could not reach the FastAPI backend. Check that the server is running on port 8000.'
-        );
-        setBackendStatus('offline');
+        setError({
+          title: 'Communication Error',
+          message: err.message || 'An unexpected error occurred while communicating with the server.',
+          help: 'Inspect browser console or backend terminal logs.',
+          type: 'generic',
+        });
       }
     } finally {
+      clearTimeout(timeoutId);
       setIsLoading(false);
       setIsStreaming(false);
       abortControllerRef.current = null;
@@ -367,6 +515,14 @@ export default function ChatWindow() {
         onDeleteConversation={handleDeleteConversation}
         isOpen={sidebarOpen}
         onToggleOpen={() => setSidebarOpen((prev) => !prev)}
+        user={currentUser}
+        accounts={accounts}
+        onSelectAccount={handleSelectAccount}
+        onOpenGoogleLogin={() => setShowGoogleModal(true)}
+        onLogout={handleLogout}
+        onOpenPersonalization={() => setShowPersonalizationModal(true)}
+        onOpenSettings={() => setShowSettingsModal(true)}
+        onOpenUpgrade={() => setShowUpgradeModal(true)}
       />
 
       {/* Main Chat Area */}
@@ -457,6 +613,34 @@ export default function ChatWindow() {
               <span className="sm:hidden">:8000</span>
             </div>
 
+            {/* User Profile in Header */}
+            {currentUser ? (
+              <button
+                onClick={() => setShowGoogleModal(true)}
+                className="flex items-center gap-2 p-1 rounded-xl hover:bg-slate-800 transition-colors border border-slate-800/80 cursor-pointer"
+                title={`${currentUser.name} (${currentUser.email}) - Click to switch Google account`}
+              >
+                <div
+                  className={`w-7 h-7 rounded-full ${
+                    currentUser.avatarColor || 'bg-emerald-600'
+                  } text-white font-semibold text-xs flex items-center justify-center shrink-0 shadow-sm`}
+                >
+                  {currentUser.initials || 'AP'}
+                </div>
+                <span className="text-xs font-medium text-slate-200 hidden xl:inline truncate max-w-[120px]">
+                  {currentUser.name}
+                </span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowGoogleModal(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-900 font-medium text-xs transition-colors shadow-sm cursor-pointer"
+              >
+                <GoogleLogo className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sign in</span>
+              </button>
+            )}
+
             {/* Clear/Delete Chat Button */}
             {activeConversationId && (
               <button
@@ -489,6 +673,7 @@ export default function ChatWindow() {
               handleSendMessage(prompt);
             }}
             onRetry={handleRetry}
+            onDismissError={() => setError(null)}
           />
         )}
 
@@ -501,8 +686,39 @@ export default function ChatWindow() {
           isLoading={isLoading}
           isStreaming={isStreaming}
           disabled={isLoadingHistory}
+          apiUrl={API_BASE_URL}
         />
       </div>
+
+      {/* Google Sign-In & Account Switcher Modal */}
+      <GoogleAuthModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        accounts={accounts}
+        activeAccount={currentUser}
+        onSelectAccount={handleSelectAccount}
+        onAddAccount={handleAddAccount}
+      />
+
+      {/* Personalization Modal */}
+      <PersonalizationModal
+        isOpen={showPersonalizationModal}
+        onClose={() => setShowPersonalizationModal(false)}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={showSettingsModal}
+        onClose={() => setShowSettingsModal(false)}
+        activeAccount={currentUser}
+      />
+
+      {/* Upgrade Plan Modal */}
+      <UpgradeModal
+        isOpen={showUpgradeModal}
+        onClose={() => setShowUpgradeModal(false)}
+        currentPlan={currentUser?.plan || 'Go'}
+      />
     </div>
   );
 }

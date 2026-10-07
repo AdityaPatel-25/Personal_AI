@@ -59,6 +59,75 @@
   animation: blink 0.8s infinite;
 }
 
+/* Typing indicator bounce dots */
+@keyframes typingBounce {
+  0%, 80%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  40% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+.typing-dot-1 {
+  animation: typingBounce 1.4s infinite ease-in-out;
+  animation-delay: 0s;
+}
+
+.typing-dot-2 {
+  animation: typingBounce 1.4s infinite ease-in-out;
+  animation-delay: 0.2s;
+}
+
+.typing-dot-3 {
+  animation: typingBounce 1.4s infinite ease-in-out;
+  animation-delay: 0.4s;
+}
+
+/* Shimmer pulse for thinking state */
+@keyframes shimmerPulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-shimmer {
+  animation: shimmerPulse 2s infinite ease-in-out;
+}
+
+/* Audio recording animated sound wave bars */
+@keyframes audioWave {
+  0%, 100% {
+    height: 6px;
+    opacity: 0.6;
+  }
+  50% {
+    height: 22px;
+    opacity: 1;
+  }
+}
+
+.voice-wave-bar {
+  width: 3.5px;
+  background-color: #818cf8;
+  border-radius: 9999px;
+  display: inline-block;
+  animation: audioWave 1.2s infinite ease-in-out;
+}
+
+.voice-wave-bar:nth-child(1) { animation-delay: 0.1s; height: 8px; }
+.voice-wave-bar:nth-child(2) { animation-delay: 0.35s; height: 16px; }
+.voice-wave-bar:nth-child(3) { animation-delay: 0.15s; height: 22px; }
+.voice-wave-bar:nth-child(4) { animation-delay: 0.45s; height: 14px; }
+.voice-wave-bar:nth-child(5) { animation-delay: 0.25s; height: 18px; }
+.voice-wave-bar:nth-child(6) { animation-delay: 0.5s; height: 10px; }
+
+
 /* Markdown styling inside AI messages */
 .prose-dsa {
   color: #e2e8f0;
@@ -104,12 +173,14 @@
 }
 
 .prose-dsa code:not(pre code) {
-  background-color: rgba(30, 41, 59, 0.8);
+  background-color: rgba(30, 41, 59, 0.85);
   color: #a5b4fc;
   padding: 0.15rem 0.4rem;
   border-radius: 0.375rem;
   font-size: 0.875em;
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  font-family: var(--font-mono);
+  word-break: break-word;
 }
 
 .prose-dsa pre {
@@ -130,20 +201,94 @@
 }
 
 .prose-dsa h1, .prose-dsa h2, .prose-dsa h3, .prose-dsa h4 {
-  color: #f1f5f9;
-  font-weight: 600;
-  margin-top: 1rem;
+  color: #f8fafc;
+  font-weight: 700;
+  margin-top: 1.25rem;
   margin-bottom: 0.5rem;
+  letter-spacing: -0.01em;
 }
 
-.prose-dsa h1 { font-size: 1.25rem; }
-.prose-dsa h2 { font-size: 1.15rem; }
-.prose-dsa h3 { font-size: 1.05rem; }
+.prose-dsa h1 { font-size: 1.35rem; }
+.prose-dsa h2 {
+  font-size: 1.18rem;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  padding-bottom: 0.35rem;
+  margin-top: 1.5rem;
+}
+.prose-dsa h3 { font-size: 1.08rem; }
+.prose-dsa h4 { font-size: 0.98rem; }
 
 .prose-dsa blockquote {
   border-left: 3px solid #6366f1;
-  padding-left: 0.75rem;
+  padding-left: 0.85rem;
   color: #94a3b8;
-  margin: 0.5rem 0;
+  margin: 0.75rem 0;
   font-style: italic;
+  background-color: rgba(99, 102, 241, 0.05);
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+  border-radius: 0 0.375rem 0.375rem 0;
+}
+
+/* Table styling for comparison matrices & cheat-sheets */
+.prose-dsa table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  text-align: left;
+}
+
+.prose-dsa thead {
+  background-color: rgba(30, 41, 59, 0.95);
+  border-bottom: 1px solid rgba(71, 85, 105, 0.8);
+}
+
+.prose-dsa th {
+  padding: 0.65rem 0.85rem;
+  font-weight: 600;
+  color: #f1f5f9;
+  letter-spacing: 0.02em;
+  border-right: 1px solid rgba(51, 65, 85, 0.6);
+  white-space: nowrap;
+}
+
+.prose-dsa th:last-child {
+  border-right: none;
+}
+
+.prose-dsa tbody tr {
+  border-bottom: 1px solid rgba(51, 65, 85, 0.5);
+  transition: background-color 0.15s ease;
+}
+
+.prose-dsa tbody tr:nth-child(even) {
+  background-color: rgba(15, 23, 42, 0.45);
+}
+
+.prose-dsa tbody tr:hover {
+  background-color: rgba(51, 65, 85, 0.35);
+}
+
+.prose-dsa tbody tr:last-child {
+  border-bottom: none;
+}
+
+.prose-dsa td {
+  padding: 0.65rem 0.85rem;
+  color: #cbd5e1;
+  vertical-align: top;
+  border-right: 1px solid rgba(51, 65, 85, 0.5);
+  line-height: 1.55;
+}
+
+.prose-dsa td:last-child {
+  border-right: none;
+}
+
+.prose-dsa hr {
+  border: none;
+  border-top: 1px solid rgba(71, 85, 105, 0.5);
+  margin: 1.25rem 0;
 }
