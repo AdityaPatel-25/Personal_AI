@@ -1,6 +1,6 @@
 # Personal AI — Competitive Programming & DSA Coach
 
-> **Milestone:** Chat & generation powered by Groq (`llama-3.3-70b-versatile`), RAG knowledge base pipeline using ChromaDB (persistent vector store) powered by local `sentence-transformers` embeddings (`all-MiniLM-L6-v2`), configurable text chunking with paragraph awareness, automated & manual indexing CLI (`scripts/index_data.py`), sample topic notes in `/data`, and context-augmented streaming chat.
+> **Milestone:** Chat & generation powered by Groq (`llama-3.3-70b-versatile`), RAG knowledge base pipeline using ChromaDB (persistent vector store) powered by built-in `DefaultEmbeddingFunction` (ONNX `all-MiniLM-L6-v2`), configurable text chunking with paragraph awareness, automated & manual indexing CLI (`scripts/index_data.py`), sample topic notes in `/data`, and context-augmented streaming chat.
 
 ---
 
@@ -21,10 +21,10 @@ Personal_AI/
 │   ├── main.py               # FastAPI application, CORS setup & router registration
 │   ├── chat.py               # Groq streaming logic (llama-3.3-70b-versatile), multi-turn context, RAG injection
 │   ├── db.py                 # SQLite database persistence (conversations & messages)
-│   ├── rag.py                # RAG pipeline: ChromaDB vector store & local sentence-transformers embeddings
+│   ├── rag.py                # RAG pipeline: ChromaDB vector store & ONNX DefaultEmbeddingFunction
 │   ├── tools.py              # Placeholder for Day 5: Code Execution Sandbox & Tools
 │   ├── chroma_db/            # Persistent ChromaDB vector database files
-│   ├── requirements.txt      # Python dependencies (groq, sentence-transformers, chromadb)
+│   ├── requirements.txt      # Python dependencies (groq, chromadb, fastapi)
 │   └── .env.example          # Backend-local env template
 └── frontend/
     ├── index.html            # Main HTML with Google Fonts (Inter, JetBrains Mono)
@@ -251,7 +251,7 @@ Here is the exact step-by-step mechanism in `frontend/src/components/ChatWindow.
 
 ## 📚 RAG Pipeline, Indexing & Verification
 
-> ⚠️ **Important Re-indexing Notice:** The embedding provider uses a local `sentence-transformers` model (`all-MiniLM-L6-v2`, 384 dimensions). Because vector dimensions changed from the legacy 768/1536-dim embeddings, the ChromaDB collection must be re-indexed from scratch. Running `python scripts/index_data.py` automatically resets and rebuilds the collection cleanly.
+> ℹ️ **Embedding Provider Notice:** The embedding provider uses ChromaDB's built-in `DefaultEmbeddingFunction` (ONNX `all-MiniLM-L6-v2`, 384 dimensions) with lazy client loading for fast startup and low memory usage (<512MB RAM). Re-indexing can be performed anytime via `python scripts/index_data.py`.
 
 ### 1. (Re)Index DSA Notes into ChromaDB
 To rebuild the collection from scratch with the local embedding model:

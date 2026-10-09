@@ -4,7 +4,7 @@ Provides:
 - Document loading for markdown (.md) and text (.txt) DSA topic notes
 - Configurable text chunking with adjustable chunk size and overlap
 - Persistent ChromaDB vector store integration
-- Local sentence-transformers embeddings (all-MiniLM-L6-v2)
+- Local ChromaDB DefaultEmbeddingFunction (ONNX all-MiniLM-L6-v2)
 - Manual/automated indexing pipeline
 - Semantic retrieval (retrieve) for augmenting DSA chat prompts
 """
@@ -16,9 +16,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import chromadb
 from dotenv import find_dotenv, load_dotenv
-from sentence_transformers import SentenceTransformer
 
 # Load environment variables (.env in workspace or parent directory)
 load_dotenv(find_dotenv(usecwd=True))
@@ -34,7 +32,7 @@ DEFAULT_CHROMA_PATH = os.path.join(BACKEND_DIR, "chroma_db")
 CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", DEFAULT_CHROMA_PATH)
 CHROMA_COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME", "dsa_notes")
 
-# Default Embedding Model: all-MiniLM-L6-v2 (fast, 384 dims, runs locally on CPU)
+# Default Embedding Model: all-MiniLM-L6-v2 (fast, 384 dims, runs locally on CPU via ONNX)
 DEFAULT_EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
 # Default Chunking Parameters (in characters)
@@ -45,20 +43,30 @@ DEFAULT_CHUNK_OVERLAP = int(os.getenv("RAG_CHUNK_OVERLAP", "120"))
 
 
 # ============================================================================
-# Local Sentence-Transformers Embeddings
+# Local ChromaDB DefaultEmbeddingFunction (ONNX all-MiniLM-L6-v2)
 # ============================================================================
 
-_embedding_model_instance: Optional[SentenceTransformer] = None
+_embedding_function_instance: Optional[Any] = None
+_chroma_client: Optional[Any] = None
 
 
-def get_embedding_model(model_name: Optional[str] = None) -> SentenceTransformer:
-    """Instantiates and caches the local SentenceTransformer embedding model."""
-    global _embedding_model_instance
-    target_model = model_name or DEFAULT_EMBEDDING_MODEL
-    if _embedding_model_instance is None:
-        logger.info("Loading local sentence-transformers model '%s'...", target_model)
-        _embedding_model_instance = SentenceTransformer(target_model)
-    return _embedding_model_instance
+def get_embedding_function():
+    """Lazily instantiates and caches ChromaDB's built-in DefaultEmbeddingFunction.
+
+    Uses ONNX runtime with all-MiniLM-L6-v2 (384 dimensions) with a tiny memory
+    footprint (~50MB RAM), completely eliminating PyTorch and sentence-transformers.
+    """
+    global _embedding_function_instance
+    if _embedding_function_instance is None:
+        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+        logger.info("Lazily initializing ChromaDB DefaultEmbeddingFunction (ONNX all-MiniLM-L6-v2)...")
+        _embedding_function_instance = DefaultEmbeddingFunction()
+    return _embedding_function_instance
+
+
+def get_embedding_model(model_name: Optional[str] = None):
+    """Backwards-compatible alias returning the lazy embedding function."""
+    return get_embedding_function()
 
 
 def embed_texts(
@@ -66,23 +74,23 @@ def embed_texts(
     model: Optional[str] = None,
     batch_size: int = 32,
 ) -> List[List[float]]:
-    """Generates embedding vectors for a list of strings using local sentence-transformers model.
+    """Generates embedding vectors for a list of strings using ChromaDB DefaultEmbeddingFunction.
 
-    Runs locally without API keys or remote network calls.
+    Runs locally via ONNX runtime without remote API keys or heavy torch dependencies.
     Returns:
         List of 384-dimensional float vectors (for all-MiniLM-L6-v2).
     """
     if not texts:
         return []
 
-    transformer = get_embedding_model(model)
-    embeddings = transformer.encode(
-        texts,
-        batch_size=batch_size,
-        show_progress_bar=False,
-        normalize_embeddings=True,
-    )
-    return embeddings.tolist()
+    fn = get_embedding_function()
+    all_embeddings: List[List[float]] = []
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i : i + batch_size]
+        batch_embeddings = fn(batch)
+        for emb in batch_embeddings:
+            all_embeddings.append(emb.tolist() if hasattr(emb, "tolist") else list(emb))
+    return all_embeddings
 
 
 def embed_query(query: str, model: Optional[str] = None) -> List[float]:
@@ -315,24 +323,31 @@ def chunk_documents(
 # ============================================================================
 
 
-def get_chroma_client() -> chromadb.PersistentClient:
-    """Returns a persistent ChromaDB client pointing to the local storage directory."""
-    try:
-        os.makedirs(CHROMA_DB_PATH, exist_ok=True)
-        return chromadb.PersistentClient(path=CHROMA_DB_PATH)
-    except Exception as e:
-        logger.error("Failed to initialize ChromaDB client at '%s': %s", CHROMA_DB_PATH, e, exc_info=True)
-        raise
+def get_chroma_client():
+    """Lazily instantiates and caches a persistent ChromaDB client pointing to the local storage directory."""
+    global _chroma_client
+    if _chroma_client is None:
+        import chromadb
+        try:
+            os.makedirs(CHROMA_DB_PATH, exist_ok=True)
+            logger.info("Lazily initializing ChromaDB persistent client at '%s'...", CHROMA_DB_PATH)
+            _chroma_client = chromadb.PersistentClient(path=CHROMA_DB_PATH)
+        except Exception as e:
+            logger.error("Failed to initialize ChromaDB client at '%s': %s", CHROMA_DB_PATH, e, exc_info=True)
+            raise
+    return _chroma_client
 
 
 def get_or_create_collection(
     collection_name: str = CHROMA_COLLECTION_NAME,
-) -> chromadb.Collection:
-    """Retrieves or creates a ChromaDB collection with cosine distance metric."""
+):
+    """Retrieves or creates a ChromaDB collection with cosine distance metric and DefaultEmbeddingFunction."""
     try:
         client = get_chroma_client()
+        ef = get_embedding_function()
         return client.get_or_create_collection(
             name=collection_name,
+            embedding_function=ef,
             metadata={"hnsw:space": "cosine"},
         )
     except Exception as e:
@@ -400,6 +415,7 @@ def index_data(
 
     # 4. Store in ChromaDB
     client = get_chroma_client()
+    ef = get_embedding_function()
     if reset_collection:
         try:
             client.delete_collection(name=CHROMA_COLLECTION_NAME)
@@ -409,6 +425,7 @@ def index_data(
 
     collection = client.get_or_create_collection(
         name=CHROMA_COLLECTION_NAME,
+        embedding_function=ef,
         metadata={"hnsw:space": "cosine"},
     )
 
@@ -431,6 +448,7 @@ def index_data(
             client.delete_collection(name=CHROMA_COLLECTION_NAME)
             collection = client.get_or_create_collection(
                 name=CHROMA_COLLECTION_NAME,
+                embedding_function=ef,
                 metadata={"hnsw:space": "cosine"},
             )
             collection.add(
@@ -492,7 +510,8 @@ def retrieve(
 
     try:
         client = get_chroma_client()
-        collection = client.get_collection(name=collection_name)
+        ef = get_embedding_function()
+        collection = client.get_collection(name=collection_name, embedding_function=ef)
     except Exception as exc:
         logger.warning("ChromaDB collection '%s' unavailable or not found: %s", collection_name, exc)
         return []

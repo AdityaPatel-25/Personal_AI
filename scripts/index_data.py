@@ -80,7 +80,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 72)
-    print("[*] Personal AI - DSA Knowledge Base Indexer (ChromaDB + Sentence-Transformers)")
+    print("[*] Personal AI - DSA Knowledge Base Indexer (ChromaDB + DefaultEmbeddingFunction ONNX)")
     print("=" * 72)
 
     if not args.test_only:
@@ -89,7 +89,7 @@ def main():
         print(f"[+] Chunk Overlap    : {args.chunk_overlap} characters")
         print(f"[+] ChromaDB Storage : {rag.CHROMA_DB_PATH}")
         print(f"[+] Collection Name  : {rag.CHROMA_COLLECTION_NAME}")
-        print(f"[+] Embedding Model  : {rag.DEFAULT_EMBEDDING_MODEL} (local, 384 dims)")
+        print(f"[+] Embedding Model  : {rag.DEFAULT_EMBEDDING_MODEL} (ONNX all-MiniLM-L6-v2, 384 dims)")
         print(f"[+] Clean Rebuild    : {not args.no_reset}")
         print("\nIndexing in progress...")
 
