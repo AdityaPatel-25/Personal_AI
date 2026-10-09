@@ -9,8 +9,7 @@ import {
   Check,
   AlertCircle,
 } from 'lucide-react';
-
-const DEFAULT_API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_BASE_URL } from '../config';
 
 export default function MessageInput({
   input,
@@ -20,7 +19,7 @@ export default function MessageInput({
   isLoading,
   isStreaming,
   disabled,
-  apiUrl = DEFAULT_API_URL,
+  apiUrl = API_BASE_URL,
 }) {
   const textareaRef = useRef(null);
 
@@ -286,7 +285,7 @@ export default function MessageInput({
             });
           } else {
             setVoiceError(
-              'Could not connect to transcription service. Make sure backend is running on :8000.'
+              `Could not connect to transcription service at ${apiUrl}. Make sure the backend is running.`
             );
           }
         } finally {

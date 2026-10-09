@@ -128,7 +128,7 @@ export default function MessageList({
     const errStr = String(error);
     if (errStr.includes('Backend Unreachable') || errStr.includes('Failed to fetch')) {
       return {
-        title: 'Backend Unreachable (Port 8000)',
+        title: 'Backend Unreachable',
         message: 'Could not connect to FastAPI server. Make sure your backend process is running.',
         help: 'Start server: uvicorn backend.main:app --reload --port 8000',
         type: 'network',

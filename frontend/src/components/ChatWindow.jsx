@@ -7,8 +7,7 @@ import PersonalizationModal from './PersonalizationModal';
 import UpgradeModal from './UpgradeModal';
 import SettingsModal from './SettingsModal';
 import { Terminal, Trash2, PanelLeft, Plus, Loader2, BookOpen } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_BASE_URL } from '../config';
 
 const DEFAULT_ACCOUNTS = [
   {
@@ -461,9 +460,9 @@ export default function ChatWindow() {
       ) {
         console.error('Backend unreachable:', err);
         setError({
-          title: 'Backend Unreachable (Port 8000)',
+          title: 'Backend Unreachable',
           message: `Could not connect to FastAPI server at ${API_BASE_URL}. Ensure the backend is running.`,
-          help: 'Start server in terminal: uvicorn backend.main:app --reload --port 8000',
+          help: `Verify that ${API_BASE_URL} is online, or start your local server: uvicorn backend.main:app --reload --port 8000`,
           type: 'network',
         });
         setBackendStatus('offline');
@@ -610,7 +609,7 @@ export default function ChatWindow() {
                   ? 'FastAPI Offline'
                   : 'Connecting...'}
               </span>
-              <span className="sm:hidden">:8000</span>
+              <span className="sm:hidden">API</span>
             </div>
 
             {/* User Profile in Header */}
